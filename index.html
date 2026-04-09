@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ankerbøjer – Mariager Fjord</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.5.0/dist/ol.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; font-family: system-ui, -apple-system, sans-serif; }
+    #map { width: 100%; height: 100%; }
+
+    .ol-popup {
+      position: absolute;
+      background-color: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      padding: 12px 16px;
+      border-radius: 8px;
+      bottom: 14px;
+      left: -50px;
+      min-width: 180px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .ol-popup::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 50px;
+      width: 0; height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 8px solid white;
+    }
+    .ol-popup-closer {
+      position: absolute;
+      top: 4px; right: 8px;
+      text-decoration: none;
+      font-size: 18px;
+      color: #666;
+      cursor: pointer;
+    }
+    .ol-popup-closer:hover { color: #000; }
+    .popup-title { font-weight: 700; margin-bottom: 2px; }
+    .popup-detail { color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="popup" class="ol-popup">
+    <a href="#" id="popup-closer" class="ol-popup-closer">&times;</a>
+    <div id="popup-content"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ol@10.5.0/dist/ol.js"></script>
+  <script>
+    // --- Buoy data from ankerboejer.csv ---
+    var buoys = [
+      { nr: 1,  ejer: 'HAVSU', nord: '56 38.315', ost: '09 50.875', navn: 'Skovsgårdhage vest' },
+      { nr: 2,  ejer: 'HAVSU', nord: '56 38.655', ost: '09 51.733', navn: 'Skovsgårdhage øst' },
+      { nr: 3,  ejer: 'HAVSU', nord: '56 38.706', ost: '09 52.931', navn: 'Højspænding' },
+      { nr: 4,  ejer: 'HAVSU', nord: '56 39.024', ost: '09 53.348', navn: 'Gamle bro' },
+      { nr: 5,  ejer: 'HAVSU', nord: '56 39.227', ost: '09 55.532', navn: 'Paradisbugt vest' },
+      { nr: 6,  ejer: 'HAVSU', nord: '56 39.267', ost: '09 55.789', navn: 'Paradisbugt øst' },
+      { nr: 7,  ejer: 'HAVSU', nord: '56 39.538', ost: '09 56.818', navn: 'Langsodde vest' },
+      { nr: 8,  ejer: 'HAVSU', nord: '56 38.929', ost: '09 56.737', navn: 'Marsilleborg' },
+      { nr: 9,  ejer: 'HAVSU', nord: '56 40.822', ost: '09 59.998', navn: 'Flintevig øst' },
+      { nr: 10, ejer: 'HAVSU', nord: '56 42.006', ost: '10 03.904', navn: "Mads's hus" },
+      { nr: 11, ejer: 'HAVSU', nord: '56 41.129', ost: '10 00.925', navn: 'Ouegårds Mølle vest' },
+      { nr: 12, ejer: 'HAVSU', nord: '56 39.821', ost: '09 57.330', navn: 'Høllet' },
+      { nr: 13, ejer: 'HAVSU', nord: '56 39.353', ost: '09 56.327', navn: 'Låenhusbugten' },
+      { nr: 14, ejer: 'HAVSU', nord: '56 39.107', ost: '09 57.699', navn: 'Mariager vest' },
+      { nr: 15, ejer: 'HAVSU', nord: '56 39.646', ost: '09 59.213', navn: 'Mariager øst' },
+      { nr: 16, ejer: 'HAVSU', nord: '56 40.294', ost: '10 01.166', navn: 'Vest for Fladbjerg' },
+      { nr: 17, ejer: 'DS',    nord: '56 41.096', ost: '10 05.042', navn: 'Bettefjord' },
+      { nr: 18, ejer: 'DS',    nord: '56 42.645', ost: '10 14.335', navn: 'Treskelbakke' },
+      { nr: 19, ejer: 'DS',    nord: '56 42.210', ost: '10 18.980', navn: 'Pladen - Als Odde N' },
+      { nr: 20, ejer: 'DS',    nord: '56 42.170', ost: '10 19.020', navn: 'Pladen - Als Odde S' },
+      { nr: 21, ejer: 'TS',    nord: '56 41.694', ost: '10 04.330', navn: 'Nybro Hage' },
+      { nr: 22, ejer: 'TS',    nord: '56 40.642', ost: '09 59.209', navn: 'Flintevig vest' },
+      { nr: 23, ejer: 'TS',    nord: '56 41.584', ost: '10 01.835', navn: 'Ouegård Mølle øst' },
+      { nr: 24, ejer: 'TS',    nord: '56 38.303', ost: '09 50.297', navn: 'Ørnedalsburgt' }
+    ];
+
+    // --- Convert "DD MM.MMM" to decimal degrees ---
+    function parseDM(s) {
+      var parts = s.trim().split(/\s+/);
+      var deg = parseFloat(parts[0]);
+      var min = parseFloat(parts[1]);
+      return deg + min / 60;
+    }
+
+    // --- Yellow flag SVG data URI ---
+    var flagSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32" viewBox="0 0 24 32">' +
+        '<line x1="4" y1="2" x2="4" y2="30" stroke="%23555" stroke-width="2" stroke-linecap="round"/>' +
+        '<polygon points="6,2 22,7 6,14" fill="%23FFD700" stroke="%23DAA520" stroke-width="1"/>' +
+      '</svg>';
+    var flagSrc = 'data:image/svg+xml,' + flagSvg;
+
+    // --- Build features ---
+    var features = buoys.map(function(b) {
+      var lat = parseDM(b.nord);
+      var lon = parseDM(b.ost);
+      var coord = ol.proj.fromLonLat([lon, lat]);
+
+      var feature = new ol.Feature({
+        geometry: new ol.geom.Point(coord),
+        nr: b.nr,
+        ejer: b.ejer,
+        navn: b.navn
+      });
+      return feature;
+    });
+
+    // --- Style function ---
+    function buoyStyle(feature) {
+      return new ol.style.Style({
+        image: new ol.style.Icon({
+          src: flagSrc,
+          anchor: [4/24, 30/32],
+          anchorXUnits: 'fraction',
+          anchorYUnits: 'fraction',
+          scale: 1.2
+        }),
+        text: new ol.style.Text({
+          text: feature.get('navn'),
+          font: 'bold 12px system-ui, sans-serif',
+          offsetX: 14,
+          offsetY: -8,
+          textAlign: 'left',
+          fill: new ol.style.Fill({ color: '#333' }),
+          stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
+          backgroundFill: new ol.style.Fill({ color: 'rgba(255,255,255,0.7)' }),
+          backgroundStroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.1)', width: 1 }),
+          padding: [2, 4, 2, 4]
+        })
+      });
+    }
+
+    // --- Vector layer ---
+    var vectorSource = new ol.source.Vector({ features: features });
+    var vectorLayer = new ol.layer.Vector({
+      source: vectorSource,
+      style: buoyStyle
+    });
+
+    // --- Map ---
+    var map = new ol.Map({
+      target: 'map',
+      layers: [
+        new ol.layer.Tile({ source: new ol.source.OSM() }),
+        vectorLayer
+      ],
+      view: new ol.View({
+        center: ol.proj.fromLonLat([10, 56.67]),
+        zoom: 12
+      })
+    });
+
+    // Fit view to all buoys
+    map.getView().fit(vectorSource.getExtent(), {
+      padding: [60, 60, 60, 60],
+      maxZoom: 14
+    });
+
+    // --- Popup overlay ---
+    var popupEl = document.getElementById('popup');
+    var popupContent = document.getElementById('popup-content');
+    var popupCloser = document.getElementById('popup-closer');
+
+    var overlay = new ol.Overlay({
+      element: popupEl,
+      autoPan: true,
+      autoPanAnimation: { duration: 200 }
+    });
+    map.addOverlay(overlay);
+
+    popupCloser.addEventListener('click', function(e) {
+      e.preventDefault();
+      overlay.setPosition(undefined);
+      popupCloser.blur();
+    });
+
+    // --- Click interaction ---
+    map.on('click', function(evt) {
+      var feature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; });
+      if (feature) {
+        var coord = feature.getGeometry().getCoordinates();
+        popupContent.innerHTML =
+          '<div class="popup-title">' + feature.get('navn') + '</div>' +
+          '<div class="popup-detail">Nr. ' + feature.get('nr') + ' &middot; Ejer: ' + feature.get('ejer') + '</div>';
+        overlay.setPosition(coord);
+      } else {
+        overlay.setPosition(undefined);
+      }
+    });
+
+    // --- Pointer cursor on hover ---
+    map.on('pointermove', function(evt) {
+      map.getTargetElement().style.cursor =
+        map.hasFeatureAtPixel(evt.pixel) ? 'pointer' : '';
+    });
+  </script>
+</body>
+</html>
