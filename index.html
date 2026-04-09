@@ -106,9 +106,10 @@
 
       var feature = new ol.Feature({
         geometry: new ol.geom.Point(coord),
-        nr: b.nr,
         ejer: b.ejer,
-        navn: b.navn
+        navn: b.navn,
+        nord: b.nord,
+        ost: b.ost
       });
       return feature;
     });
@@ -199,7 +200,8 @@
         var coord = feature.getGeometry().getCoordinates();
         popupContent.innerHTML =
           '<div class="popup-title">' + feature.get('navn') + '</div>' +
-          '<div class="popup-detail">Nr. ' + feature.get('nr') + ' &middot; Ejer: ' + feature.get('ejer') + '</div>';
+          '<div class="popup-detail">Ejer: ' + feature.get('ejer') + '</div>' +
+          '<div class="popup-detail">Position: ' + feature.get('nord') + ' N, ' + feature.get('ost') + ' E</div>';
         overlay.setPosition(coord);
       } else {
         overlay.setPosition(undefined);
